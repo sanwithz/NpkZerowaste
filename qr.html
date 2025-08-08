@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Coupon QR Code System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Poppins', sans-serif; background: #f0f9ff; }
+    .qr-card { transition: 0.3s; } .qr-card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
+    .loader { border-top-color: #3b82f6; animation: spin 1.5s linear infinite; }
+    @keyframes spin { 0% {transform: rotate(0deg);} 100% {transform: rotate(360deg);} }
+  </style>
+</head>
+<body>
+  <div class="min-h-screen">
+    <header class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white py-6 shadow-lg text-center text-3xl font-bold">Coupon QR Code System</header>
+    <main class="container mx-auto p-8">
+      <div class="flex justify-between mb-8">
+        <select id="filter" class="px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500">
+          <option value="all">All</option><option value="used">Used</option><option value="available">Available</option>
+        </select>
+        <button id="refresh" class="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+          Refresh
+        </button>
+      </div>
+      <div id="loading" class="hidden flex justify-center my-12">
+        <div class="loader rounded-full border-4 border-gray-200 h-12 w-12"></div>
+      </div>
+      <div id="error" class="hidden text-center text-red-500 mb-4">Failed to load coupons.</div>
+      <div id="coupons" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
+      <div id="empty" class="hidden text-center mt-8 text-gray-400">No coupons found.</div>
+    </main>
+  </div>
+
+<div id="modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+  <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg p-6 max-w-md w-full mx-4">
+    <div id="modalContent" class="flex flex-col items-center"></div>
+    <button id="closeModal" class="mt-4 text-blue-600 flex flex-col items-center">Close</button>
+  </div>
+</div>
+
+
+  <script>
+    const API = 'https://opensheet.elk.sh/14ZZIYloL8GPspQl4m02U1os6P3CyCUdM5H_xtpMeWK0/Coupons', 
+          QR = t => `https://quickchart.io/qr?text=${encodeURIComponent(t)}`,
+          $ = id => document.getElementById(id),
+          show = (el, visible) => el.classList.toggle('hidden', !visible);
+
+    const fetchCoupons = async () => {
+      show($('loading'), true);
+      try {
+        const res = await fetch(API);
+        if (!res.ok) throw Error('Fail');
+        coupons = await res.json();
+        render();
+      } catch (e) {
+        show($('error'), true);
+      } finally {
+        show($('loading'), false);
+      }
+    };
+
+    const render = () => {
+      const f = $('filter').value, c = $('coupons');
+      let list = coupons.filter(x => f === 'all' || (f === 'used') === (x.Status === 'Used'));
+      c.innerHTML = list.map(x => `
+        <div class="qr-card bg-white rounded-lg shadow-md overflow-hidden ${x.Status === 'Used' ? 'opacity-75' : ''}">
+          <div class="relative p-4 flex justify-center">
+            <img src="${QR(x.Coupons)}" class="w-48 h-48">
+            ${x.Status === 'Used' ? `<div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
+              <span class="bg-red-500 text-white px-3 py-1 rounded-full text-sm rotate-12">USED</span>
+            </div>` : ''}
+          </div>
+          <div class="p-4 border-t text-sm text-gray-600">
+            <div class="flex justify-between font-semibold text-gray-800 mb-2">
+              <span>Coupon: ${x.Coupons}</span>
+              <span class="bg-blue-100 text-blue-800 text-xs px-2.5 py-0.5 rounded">${x.Point || 0} Points</span>
+            </div>
+            ${x.Claimer ? `<p>Claimed by: ${x.Claimer}</p>` : ''}
+            <p>Status: <span class="text-${x.Status === 'Used' ? 'red' : 'green'}-500">${x.Status || 'Available'}</span></p>
+            <button onclick="showModal('${x.Coupons}', '${x.Point || 0}', '${x.Status || 'Available'}', '${x.Claimer || ''}')" class="mt-3 w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded">View QR Code</button>
+          </div>
+        </div>`).join('');
+      show($('empty'), list.length === 0);
+    };
+
+    const showModal = (code, points, status, claimer) => {
+      $('modalContent').innerHTML = `
+        <img src="${QR(code)}" class="w-48 h-48 mb-4">
+        <h3 class="text-lg font-semibold">${code}</h3>
+        <div class="text-center text-gray-600">
+          <p>${points} Points</p>
+          <p class="text-${status === 'Used' ? 'red' : 'green'}-500">${status}</p>
+          ${claimer ? `<p>Claimed by: ${claimer}</p>` : ''}
+        </div>
+      `;
+      show($('modal'), true);
+    };
+
+    $('filter').onchange = render;
+    $('refresh').onclick = fetchCoupons;
+    $('closeModal').onclick = () => show($('modal'), false);
+    $('modal').onclick = e => { if (e.target.id === 'modal') show($('modal'), false) };
+
+    let coupons = [];
+    fetchCoupons();
+  </script>
+</body>
+</html>
